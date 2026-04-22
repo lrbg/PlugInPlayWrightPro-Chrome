@@ -1,0 +1,26 @@
+{
+  "name": "playwrightpro-extension",
+  "version": "1.0.0",
+  "description": "PlaywrightPro Chrome Extension - Playwright Test Recorder & Manager",
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch",
+    "build:dev": "webpack --mode development"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.277",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "copy-webpack-plugin": "^12.0.2",
+    "css-loader": "^7.1.2",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.7.2",
+    "webpack": "^5.96.1",
+    "webpack-cli": "^5.1.4"
+  }
+}

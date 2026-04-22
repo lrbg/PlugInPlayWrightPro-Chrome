@@ -1,0 +1,116 @@
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - generated-tests/**
+      - playwright.config.ts
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+
+parameters:
+  - name: testFile
+    displayName: 'Specific test file (leave empty for all)'
+    type: string
+    default: ''
+  - name: baseUrl
+    displayName: 'Override BASE_URL'
+    type: string
+    default: ''
+
+variables:
+  - name: BASE_URL
+    value: ${{ parameters.baseUrl }}
+  - name: NODE_VERSION
+    value: '20.x'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  - stage: Test
+    displayName: 'Run Playwright Tests'
+    jobs:
+      - job: PlaywrightTest
+        displayName: 'Playwright E2E Tests'
+        timeoutInMinutes: 30
+        steps:
+          - task: NodeTool@0
+            displayName: 'Setup Node.js $(NODE_VERSION)'
+            inputs:
+              versionSpec: '$(NODE_VERSION)'
+
+          - task: Cache@2
+            displayName: 'Cache node_modules'
+            inputs:
+              key: 'npm | "$(Agent.OS)" | package-lock.json'
+              restoreKeys: |
+                npm | "$(Agent.OS)"
+              path: node_modules
+
+          - script: npm ci
+            displayName: 'Install dependencies'
+
+          - script: npx playwright install chromium --with-deps
+            displayName: 'Install Playwright browsers (Chromium for CI)'
+
+          - script: |
+              if [ -n "${{ parameters.testFile }}" ]; then
+                npx playwright test "${{ parameters.testFile }}" --project=chromium-ci
+              else
+                npx playwright test --project=chromium-ci
+              fi
+            displayName: 'Run Playwright tests'
+            env:
+              CI: 'true'
+              BASE_URL: $(BASE_URL)
+            continueOnError: true
+
+          - task: PublishTestResults@2
+            displayName: 'Publish test results'
+            condition: always()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'test-results/results.xml'
+              testRunTitle: 'Playwright E2E - $(Build.BuildNumber)'
+              failTaskOnFailedTests: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Playwright report'
+            condition: always()
+            inputs:
+              pathToPublish: 'playwright-report'
+              artifactName: 'playwright-report-$(Build.BuildNumber)'
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish test results JSON'
+            condition: always()
+            inputs:
+              pathToPublish: 'test-results'
+              artifactName: 'test-results-$(Build.BuildNumber)'
+
+          - script: |
+              STATUS="pass"
+              if [ "$(Agent.JobStatus)" != "Succeeded" ]; then STATUS="fail"; fi
+              curl -s -X POST "$(WEBHOOK_URL)" \
+                -H "Content-Type: application/json" \
+                -H "X-Webhook-Secret: $(WEBHOOK_SECRET)" \
+                -d "{
+                  \"scriptId\": \"azdo-$(Build.BuildId)\",
+                  \"testCaseNumber\": \"AZ-$(Build.BuildNumber)\",
+                  \"scriptName\": \"${{ parameters.testFile }}\",
+                  \"status\": \"$STATUS\",
+                  \"duration\": 0,
+                  \"startedAt\": \"$(Build.QueuedAt)\",
+                  \"finishedAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+                  \"source\": \"azure-devops\"
+                }" || true
+            displayName: 'Send webhook notification'
+            condition: always()
+            continueOnError: true

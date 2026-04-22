@@ -1,0 +1,15 @@
+node_modules/
+dist/
+extension/dist/
+companion-server/dist/
+test-results/
+playwright-report/
+screenshots/
+*.local
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db
+generated-tests/**/*.spec.ts
+!generated-tests/examples/

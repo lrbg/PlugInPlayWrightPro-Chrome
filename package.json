@@ -1,0 +1,23 @@
+{
+  "name": "playwrightpro-chrome",
+  "version": "1.0.0",
+  "description": "PlaywrightPro - Chrome Extension for Playwright test recording and management",
+  "scripts": {
+    "install:all": "npm install && cd extension && npm install && cd ../companion-server && npm install",
+    "build:extension": "cd extension && npm run build",
+    "build:server": "cd companion-server && npm run build",
+    "build": "npm run build:extension && npm run build:server",
+    "dev:extension": "cd extension && npm run dev",
+    "dev:server": "cd companion-server && npm run dev",
+    "start:server": "cd companion-server && npm start",
+    "test": "npx playwright test --project=chromium-ci",
+    "test:chrome": "npx playwright test --project=chrome",
+    "test:ui": "npx playwright test --ui",
+    "test:headed": "npx playwright test --headed",
+    "test:report": "npx playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "typescript": "^5.7.2"
+  }
+}

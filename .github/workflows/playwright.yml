@@ -1,0 +1,100 @@
+name: Playwright Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'generated-tests/**'
+      - 'playwright.config.ts'
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      test_file:
+        description: 'Specific test file to run (leave empty for all)'
+        required: false
+        default: ''
+      base_url:
+        description: 'Override BASE_URL for this run'
+        required: false
+        default: ''
+
+env:
+  BASE_URL: ${{ github.event.inputs.base_url || vars.BASE_URL || '' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (Chromium for CI)
+        run: npx playwright install chromium --with-deps
+
+      - name: Run Playwright tests
+        run: |
+          if [ -n "${{ github.event.inputs.test_file }}" ]; then
+            npx playwright test "${{ github.event.inputs.test_file }}" --project=chromium-ci
+          else
+            npx playwright test --project=chromium-ci
+          fi
+        env:
+          CI: true
+          BASE_URL: ${{ env.BASE_URL }}
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          retention-days: 30
+
+      - name: Upload test results (JUnit)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ github.run_id }}
+          path: test-results/
+          retention-days: 30
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Playwright Results
+          path: test-results/results.xml
+          reporter: java-junit
+        continue-on-error: true
+
+      - name: Send webhook notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then STATUS="pass"; else STATUS="fail"; fi
+          curl -s -X POST "${{ vars.WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Secret: ${{ secrets.WEBHOOK_SECRET }}" \
+            -d "{
+              \"scriptId\": \"ci-run-${{ github.run_id }}\",
+              \"testCaseNumber\": \"CI-${{ github.run_number }}\",
+              \"scriptName\": \"${{ github.event.inputs.test_file || 'All tests' }}\",
+              \"status\": \"$STATUS\",
+              \"duration\": 0,
+              \"startedAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+              \"finishedAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+              \"source\": \"github-actions\"
+            }" || true
+        continue-on-error: true

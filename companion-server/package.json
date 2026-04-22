@@ -1,0 +1,26 @@
+{
+  "name": "playwrightpro-companion-server",
+  "version": "1.0.0",
+  "description": "Companion server for PlaywrightPro Chrome Extension - runs Playwright tests locally",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "start:dev": "npm run build && npm start"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "@types/uuid": "^10.0.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.7.2"
+  }
+}
