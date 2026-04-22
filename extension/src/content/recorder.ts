@@ -18,7 +18,9 @@ function getElementInfo(element: Element): ElementInfo {
   const role = element.getAttribute('role') || undefined;
   const placeholder = element.getAttribute('placeholder') || undefined;
   const type = element.getAttribute('type') || undefined;
-  const text = element.textContent?.trim().slice(0, 80) || undefined;
+  // Collapse whitespace/newlines from DOM text so it doesn't break generated code
+  const rawText = element.textContent || '';
+  const text = rawText.replace(/\s+/g, ' ').trim().slice(0, 80) || undefined;
   const classes = Array.from(element.classList).filter(
     (c) => !c.startsWith('hover:') && !c.startsWith('focus:')
   );
@@ -67,11 +69,20 @@ function buildCssPath(element: Element | null): string {
   return parts.join(' > ');
 }
 
+/** Collapse all whitespace variants so no field can contain raw newlines. */
+function cleanStr(s?: string): string | undefined {
+  if (!s) return undefined;
+  return s.replace(/\s+/g, ' ').trim().slice(0, 200) || undefined;
+}
+
 function sendAction(action: Omit<RecordedAction, 'id' | 'timestamp'>) {
   chrome.runtime.sendMessage({
     type: 'ACTION_RECORDED',
     payload: {
       ...action,
+      value: cleanStr(action.value),
+      description: cleanStr(action.description),
+      selector: cleanStr(action.selector) || '',
       id: `action-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       timestamp: Date.now(),
     },
