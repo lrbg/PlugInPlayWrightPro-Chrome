@@ -1,4 +1,5 @@
-import { RecordedAction, ElementInfo } from '../types';
+import { RecordedAction } from '../types';
+import { ElementInfo } from '../utils/selectorBuilder';
 
 let isRecording = false;
 const IGNORED_TAGS = ['html', 'body', 'head', 'script', 'style', 'meta', 'link'];
