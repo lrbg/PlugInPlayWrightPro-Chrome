@@ -37,7 +37,10 @@ export function Settings({ onSave }: Props) {
     setTestingServer(true);
     try {
       const url = `${settings.companionServerUrl}:${settings.companionServerPort}/health`;
-      const resp = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 4000)
+      );
+      const resp = await Promise.race([fetch(url), timeout]);
       setServerStatus(resp.ok ? 'ok' : 'error');
     } catch {
       setServerStatus('error');

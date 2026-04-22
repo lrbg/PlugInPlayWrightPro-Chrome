@@ -7,22 +7,29 @@ import { handleWebhook } from './webhook';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const TESTS_DIR = process.env.TESTS_DIR || path.join(process.cwd(), '..', 'generated-tests');
-const RESULTS_DIR = path.join(process.cwd(), 'test-results');
+
+// Use __dirname so paths are correct regardless of where the process was started from
+// __dirname = companion-server/dist  →  PROJECT_ROOT = companion-server/dist/../../
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+const COMPANION_ROOT = path.resolve(__dirname, '..');
+
+const TESTS_DIR = process.env.TESTS_DIR || path.join(PROJECT_ROOT, 'generated-tests');
+const RESULTS_DIR = path.join(COMPANION_ROOT, 'test-results');
 
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '10mb' }));
 
 fs.mkdirSync(TESTS_DIR, { recursive: true });
 fs.mkdirSync(RESULTS_DIR, { recursive: true });
-fs.mkdirSync(path.join(process.cwd(), 'screenshots'), { recursive: true });
+fs.mkdirSync(path.join(PROJECT_ROOT, 'screenshots'), { recursive: true });
 
-// Health check — includes node version and playwright availability
+// Health check — the extension polls this to show server status
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     version: '1.0.0',
     nodeVersion: process.version,
+    projectRoot: PROJECT_ROOT,
     testsDir: TESTS_DIR,
     timestamp: new Date().toISOString(),
   });
@@ -48,12 +55,13 @@ app.post('/run', async (req: Request, res: Response) => {
 
   try {
     fs.writeFileSync(filePath, code, 'utf-8');
-
     const result = await runTest(filePath, baseUrl);
 
-    // Persist result
     const resultFile = path.join(RESULTS_DIR, `${scriptId || 'result'}-${Date.now()}.json`);
-    fs.writeFileSync(resultFile, JSON.stringify({ ...result, scriptId, testCaseNumber, scriptName }, null, 2));
+    fs.writeFileSync(
+      resultFile,
+      JSON.stringify({ ...result, scriptId, testCaseNumber, scriptName }, null, 2)
+    );
 
     res.json(result);
   } catch (err) {
@@ -96,19 +104,22 @@ app.get('/tests', (_req: Request, res: Response) => {
 
 // Get recent results
 app.get('/results', (_req: Request, res: Response) => {
-  const files = fs.readdirSync(RESULTS_DIR)
+  const files = fs
+    .readdirSync(RESULTS_DIR)
     .filter((f) => f.endsWith('.json'))
     .sort()
     .reverse()
     .slice(0, 50);
 
-  const results = files.map((f) => {
-    try {
-      return JSON.parse(fs.readFileSync(path.join(RESULTS_DIR, f), 'utf-8'));
-    } catch {
-      return null;
-    }
-  }).filter(Boolean);
+  const results = files
+    .map((f) => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(RESULTS_DIR, f), 'utf-8'));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
 
   res.json({ results });
 });
@@ -124,7 +135,9 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(PORT, () => {
   console.log(`\n🎭 PlaywrightPro Companion Server`);
+  console.log(`   Node:      ${process.version}`);
   console.log(`   Port:      ${PORT}`);
+  console.log(`   Root:      ${PROJECT_ROOT}`);
   console.log(`   Tests dir: ${TESTS_DIR}`);
   console.log(`   Results:   ${RESULTS_DIR}`);
   console.log(`   Health:    http://localhost:${PORT}/health\n`);

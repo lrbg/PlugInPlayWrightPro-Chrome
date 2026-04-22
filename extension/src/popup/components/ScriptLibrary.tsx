@@ -16,13 +16,17 @@ export function ScriptLibrary({ onEditScript, onRunScript, companionUrl, refresh
   const [search, setSearch] = useState('');
   const [running, setRunning] = useState<string | null>(null);
   const [serverOnline, setServerOnline] = useState(false);
+  const [serverChecking, setServerChecking] = useState(false);
 
   useEffect(() => {
     loadData();
   }, [refreshKey]);
 
+  // Check server on mount + whenever companionUrl changes + poll every 10s
   useEffect(() => {
     checkServer();
+    const interval = setInterval(checkServer, 10_000);
+    return () => clearInterval(interval);
   }, [companionUrl]);
 
   const loadData = async () => {
@@ -32,11 +36,20 @@ export function ScriptLibrary({ onEditScript, onRunScript, companionUrl, refresh
   };
 
   const checkServer = async () => {
+    if (serverChecking) return;
+    setServerChecking(true);
     try {
-      const resp = await fetch(`${companionUrl}/health`, { signal: AbortSignal.timeout(2000) });
+      // AbortSignal.timeout may be unreliable in extension context — use Promise.race
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 4000)
+      );
+      const fetchPromise = fetch(`${companionUrl}/health`);
+      const resp = await Promise.race([fetchPromise, timeoutPromise]);
       setServerOnline(resp.ok);
     } catch {
       setServerOnline(false);
+    } finally {
+      setServerChecking(false);
     }
   };
 
@@ -156,8 +169,17 @@ export function ScriptLibrary({ onEditScript, onRunScript, companionUrl, refresh
       </div>
 
       {!serverOnline && (
-        <div className="warning-banner">
-          ⚠️ Companion server not running. Start it with <code>npm start</code> in the <code>companion-server</code> folder to run tests locally.
+        <div className="warning-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span>
+            {serverChecking
+              ? '⏳ Checking companion server…'
+              : `⚠️ Server offline — run: bash start-server.sh  (port 3001)`}
+          </span>
+          {!serverChecking && (
+            <button className="btn btn-xs btn-secondary" onClick={checkServer} style={{ flexShrink: 0 }}>
+              🔄 Retry
+            </button>
+          )}
         </div>
       )}
 
