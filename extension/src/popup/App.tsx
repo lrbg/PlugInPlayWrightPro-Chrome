@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Tab, TestCase, RecordedAction, Script, AppSettings, TestResult } from '../types';
 import { TestCaseForm } from './components/TestCaseForm';
 import { Recorder } from './components/Recorder';
@@ -8,6 +8,18 @@ import { Settings } from './components/Settings';
 import { saveScript, getSettings, saveResult } from '../utils/storage';
 import { generatePlaywrightScript } from '../utils/scriptGenerator';
 
+const SESSION_KEY = 'ppp_active_session';
+
+async function loadSession(): Promise<{ tc: TestCase | null; actions: RecordedAction[] }> {
+  const data = await chrome.storage.local.get(SESSION_KEY);
+  const session = data[SESSION_KEY];
+  return { tc: session?.testCase ?? null, actions: session?.actions ?? [] };
+}
+
+async function persistSession(tc: TestCase | null, actions: RecordedAction[]): Promise<void> {
+  await chrome.storage.local.set({ [SESSION_KEY]: { testCase: tc, actions } });
+}
+
 export function App() {
   const [activeTab, setActiveTab] = useState<Tab>('testcase');
   const [currentTestCase, setCurrentTestCase] = useState<TestCase | null>(null);
@@ -16,6 +28,16 @@ export function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingScript, setEditingScript] = useState<Script | null>(null);
   const [notification, setNotification] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [ready, setReady] = useState(false);
+
+  // Restore session from storage when popup opens
+  useEffect(() => {
+    loadSession().then(({ tc, actions }) => {
+      if (tc) setCurrentTestCase(tc);
+      if (actions.length > 0) setRecordedActions(actions);
+      setReady(true);
+    });
+  }, []);
 
   const showNotif = (msg: string, type: 'success' | 'error' = 'success') => {
     setNotification({ msg, type });
@@ -24,12 +46,18 @@ export function App() {
 
   const handleTestCaseSave = (tc: TestCase) => {
     setCurrentTestCase(tc);
+    persistSession(tc, recordedActions);
     showNotif(`Test case "${tc.number}" saved. Go to Recorder to record actions.`);
     setTimeout(() => setActiveTab('recorder'), 500);
   };
 
   const handleActionsChange = useCallback((actions: RecordedAction[]) => {
     setRecordedActions(actions);
+    // Persist actions in storage so they survive popup close/reopen
+    chrome.storage.local.get(SESSION_KEY).then((data) => {
+      const session = data[SESSION_KEY] || {};
+      chrome.storage.local.set({ [SESSION_KEY]: { ...session, actions } });
+    });
   }, []);
 
   const handleSaveScript = async () => {
@@ -71,8 +99,12 @@ export function App() {
     }
 
     await saveScript(script);
-    setRefreshKey((k) => k + 1);
+    // Clear the active session after script is saved
+    await chrome.storage.local.remove(SESSION_KEY);
+    setCurrentTestCase(null);
+    setRecordedActions([]);
     setEditingScript(null);
+    setRefreshKey((k) => k + 1);
     showNotif(`Script "${currentTestCase.number}" saved successfully!`);
     setTimeout(() => setActiveTab('library'), 500);
   };
@@ -81,6 +113,7 @@ export function App() {
     setEditingScript(script);
     setCurrentTestCase(script.testCase);
     setRecordedActions(script.actions);
+    persistSession(script.testCase, script.actions);
     setActiveTab('testcase');
     showNotif(`Editing script: ${script.testCase.number}`);
   };
@@ -166,6 +199,8 @@ export function App() {
   const companionUrl = appSettings
     ? `${appSettings.companionServerUrl}:${appSettings.companionServerPort}`
     : 'http://localhost:3001';
+
+  if (!ready) return <div className="app"><div className="loading">Loading…</div></div>;
 
   return (
     <div className="app">
