@@ -17,11 +17,12 @@ fs.mkdirSync(TESTS_DIR, { recursive: true });
 fs.mkdirSync(RESULTS_DIR, { recursive: true });
 fs.mkdirSync(path.join(process.cwd(), 'screenshots'), { recursive: true });
 
-// Health check
+// Health check — includes node version and playwright availability
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     version: '1.0.0',
+    nodeVersion: process.version,
     testsDir: TESTS_DIR,
     timestamp: new Date().toISOString(),
   });
