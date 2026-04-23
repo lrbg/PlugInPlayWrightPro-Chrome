@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Script, TestResult, DashboardMetrics } from '../../types';
-import { getScripts, getResults } from '../../utils/storage';
+import { getScripts, getResults, clearResults, resetScriptStats } from '../../utils/storage';
 
 interface Props {
   refreshKey: number;
@@ -22,6 +22,12 @@ export function Dashboard({ refreshKey }: Props) {
   useEffect(() => {
     loadMetrics();
   }, [refreshKey]);
+
+  const handleClear = async () => {
+    if (!confirm('Clear all test results and reset script stats? This cannot be undone.')) return;
+    await Promise.all([clearResults(), resetScriptStats()]);
+    loadMetrics();
+  };
 
   const loadMetrics = async () => {
     setLoading(true);
@@ -89,6 +95,14 @@ export function Dashboard({ refreshKey }: Props) {
         {metrics.lastRunAt && (
           <span className="last-run">Last run: {new Date(metrics.lastRunAt).toLocaleString()}</span>
         )}
+        <button
+          className="btn btn-danger btn-sm"
+          onClick={handleClear}
+          title="Clear all results and reset stats"
+          style={{ marginLeft: 'auto' }}
+        >
+          Clear Metrics
+        </button>
       </div>
 
       <div className="metrics-grid">

@@ -90,3 +90,25 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
     chrome.storage.local.set({ [KEYS.SETTINGS]: settings }, resolve);
   });
 }
+
+export async function clearResults(): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.storage.local.remove(KEYS.RESULTS, resolve);
+  });
+}
+
+export async function resetScriptStats(): Promise<void> {
+  const scripts = await getScripts();
+  const reset = scripts.map((s) => ({
+    ...s,
+    runCount: 0,
+    passCount: 0,
+    failCount: 0,
+    avgDuration: 0,
+    lastRunAt: undefined,
+    lastRunStatus: undefined,
+  }));
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [KEYS.SCRIPTS]: reset }, resolve);
+  });
+}
