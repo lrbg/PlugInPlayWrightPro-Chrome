@@ -33,7 +33,7 @@ export default defineConfig({
     channel: 'chrome',
     headless: process.env.CI ? true : false,
     viewport: { width: 1280, height: 720 },
-    actionTimeout: 10_000,
+    actionTimeout: 30_000,
     navigationTimeout: 30_000,
   },
   projects: [

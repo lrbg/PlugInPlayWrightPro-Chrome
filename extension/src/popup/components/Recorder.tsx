@@ -34,17 +34,34 @@ export function Recorder({ testCase, onActionsChange }: Props) {
   const [showScreenshotForm, setShowScreenshotForm] = useState(false);
   const [pollInterval, setPollInterval] = useState<ReturnType<typeof setInterval> | null>(null);
 
+  // On mount: sync recording state from background (popup may have been closed/reopened)
+  useEffect(() => {
+    chrome.runtime.sendMessage({ type: 'GET_RECORDING_STATUS' }).then((response) => {
+      if (response?.isRecording) {
+        setIsRecording(true);
+      }
+      if (response?.actions?.length) {
+        setActions(response.actions);
+        onActionsChange(response.actions);
+      }
+    });
+  }, []);
+
   const syncActionsFromBackground = useCallback(async () => {
     const response = await chrome.runtime.sendMessage({ type: 'GET_RECORDING_STATUS' });
     if (response?.actions) {
       setActions(response.actions);
       onActionsChange(response.actions);
     }
-  }, [onActionsChange]);
+    // If background says recording stopped (e.g. tab closed) keep UI in sync
+    if (response && !response.isRecording && isRecording) {
+      setIsRecording(false);
+    }
+  }, [onActionsChange, isRecording]);
 
   useEffect(() => {
     if (isRecording) {
-      const interval = setInterval(syncActionsFromBackground, 1000);
+      const interval = setInterval(syncActionsFromBackground, 800);
       setPollInterval(interval);
       return () => clearInterval(interval);
     } else {
@@ -58,15 +75,22 @@ export function Recorder({ testCase, onActionsChange }: Props) {
     if (!tab?.id) return;
 
     if (!isRecording) {
+      // Inject content script then tell both content script and background to start
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['content/recorder.js'],
       });
+      // Small delay so content script listener is ready
+      await new Promise((r) => setTimeout(r, 120));
       await chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' });
-      await chrome.runtime.sendMessage({ type: 'START_RECORDING' });
+      // Pass tabId to background so it can re-inject on navigation
+      await chrome.runtime.sendMessage({ type: 'START_RECORDING', tabId: tab.id });
       setIsRecording(true);
     } else {
-      await chrome.tabs.sendMessage(tab.id, { type: 'STOP_RECORDING' });
+      // Stop — try to send to tab (may already be navigated away, that's OK)
+      try {
+        await chrome.tabs.sendMessage(tab.id, { type: 'STOP_RECORDING' });
+      } catch {}
       const response = await chrome.runtime.sendMessage({ type: 'STOP_RECORDING' });
       setIsRecording(false);
       if (response?.actions) {

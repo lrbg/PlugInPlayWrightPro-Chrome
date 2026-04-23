@@ -30,6 +30,9 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:* https://api.github.com https://*.github.com;"
+  },
   "web_accessible_resources": [
     {
       "resources": ["content/recorder.js"],
