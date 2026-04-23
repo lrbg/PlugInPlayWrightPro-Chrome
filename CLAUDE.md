@@ -1,22 +1,22 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Este archivo proporciona orientación a Claude Code (claude.ai/code) cuando trabaja con el código de este repositorio.
 
 ---
 
-## Build & Dev Commands
+## Comandos de build y desarrollo
 
-### Extension (Chrome Extension — React + TypeScript + Webpack)
+### Extensión (Chrome Extension — React + TypeScript + Webpack)
 
 ```bash
 cd extension
-npm install              # install deps
-npm run build            # production build → extension/dist/
-npm run dev              # webpack watch mode (rebuild on save)
-npm run build:dev        # dev build (source maps, no minification)
+npm install              # instalar dependencias
+npm run build            # build de producción → extension/dist/
+npm run dev              # modo watch (recompila al guardar)
+npm run build:dev        # build de desarrollo (source maps, sin minificación)
 ```
 
-After any change to `extension/src/`, run `npm run build` and then reload the extension in `chrome://extensions`.
+Tras cualquier cambio en `extension/src/`, ejecutar `npm run build` y recargar la extensión en `chrome://extensions`.
 
 ### Companion Server (Node.js + Express + TypeScript)
 
@@ -24,141 +24,141 @@ After any change to `extension/src/`, run `npm run build` and then reload the ex
 cd companion-server
 npm install
 npm run build            # tsc → companion-server/dist/
-npm run dev              # ts-node-dev watch mode
-node dist/server.js      # run the compiled server directly
+npm run dev              # ts-node-dev modo watch
+node dist/server.js      # ejecutar el servidor compilado directamente
 ```
 
-### Root workspace shortcuts
+### Atajos desde la raíz del workspace
 
 ```bash
-npm run install:all      # installs root + extension + server deps
-npm run build            # builds both extension and companion server
-npm run build:extension  # extension only
-npm run build:server     # server only
-npm run start:server     # starts companion server (port 3001)
+npm run install:all      # instala dependencias de raíz + extensión + servidor
+npm run build            # compila extensión y servidor
+npm run build:extension  # solo extensión
+npm run build:server     # solo servidor
+npm run start:server     # inicia companion server en puerto 3001
 ```
 
-### Run Playwright tests
+### Ejecutar tests Playwright
 
 ```bash
-npx playwright test                          # all tests in generated-tests/
-npx playwright test --project=chrome        # Chrome channel only
-npx playwright test --headed                # visible browser
-npx playwright test tests/TC-001-*.spec.ts  # single test by file
-npx playwright test --ui                    # Playwright UI mode
+npx playwright test                           # todos los tests en generated-tests/
+npx playwright test --project=chrome         # solo canal Chrome
+npx playwright test --headed                 # con navegador visible
+npx playwright test tests/TC-001-*.spec.ts   # un test específico por archivo
+npx playwright test --ui                     # modo UI de Playwright
 ```
 
-### Auto-start companion server (macOS LaunchAgent)
+### Auto-inicio del servidor (macOS LaunchAgent)
 
 ```bash
-# Enable auto-start on login
+# Activar auto-inicio al iniciar sesión
 launchctl load ~/Library/LaunchAgents/com.playwrightpro.companion.plist
 
-# Disable
+# Desactivar
 launchctl unload ~/Library/LaunchAgents/com.playwrightpro.companion.plist
 
-# Logs
+# Ver logs
 tail -f /tmp/playwrightpro-companion.log
 tail -f /tmp/playwrightpro-companion.error.log
 
-# Health check
+# Verificar que responde
 curl http://localhost:3001/health
 ```
 
 ---
 
-## Architecture
+## Arquitectura
 
-### Two-process model
+### Modelo de dos procesos
 
 ```
 ┌─────────────────────────────────────────┐
 │  Chrome Extension (extension/dist/)     │
 │  ┌────────────────────────────────────┐ │
 │  │  Popup UI (React 18)               │ │
-│  │  App.tsx — 5-tab shell             │ │
-│  │  ├─ TestCaseForm  (tab: testcase)  │ │
-│  │  ├─ Recorder      (tab: recorder)  │ │
-│  │  ├─ ScriptLibrary (tab: library)   │ │
-│  │  ├─ Dashboard     (tab: dashboard) │ │
-│  │  └─ Settings      (tab: settings)  │ │
+│  │  App.tsx — shell de 5 pestañas     │ │
+│  │  ├─ TestCaseForm  (pestaña: testcase)  │ │
+│  │  ├─ Recorder      (pestaña: recorder)  │ │
+│  │  ├─ ScriptLibrary (pestaña: library)   │ │
+│  │  ├─ Dashboard     (pestaña: dashboard) │ │
+│  │  └─ Settings      (pestaña: settings)  │ │
 │  └────────────────────────────────────┘ │
 │  background/service-worker.ts           │
-│  content/recorder.ts  ← injected into  │
-│                          every page     │
+│  content/recorder.ts  ← inyectado en   │
+│                          cada página    │
 └──────────────┬──────────────────────────┘
                │ fetch POST /run
                ▼
 ┌─────────────────────────────────────────┐
 │  Companion Server  (companion-server/)  │
 │  Express  :3001                         │
-│  POST /run  → writes .spec.ts, spawns   │
+│  POST /run  → escribe .spec.ts, lanza   │
 │               npx playwright test       │
 │  GET  /health                           │
-│  POST /webhook  ← CI/CD callbacks       │
+│  POST /webhook  ← callbacks de CI/CD   │
 └─────────────────────────────────────────┘
 ```
 
-### Data flow: record → generate → run
+### Flujo de datos: grabar → generar → ejecutar
 
-1. **Record**: `content/recorder.ts` listens to DOM events (click/input/change) → sends `ACTION_RECORDED` messages to `service-worker.ts` → service worker forwards to popup via `chrome.runtime.onMessage`.
-2. **Generate**: `utils/scriptGenerator.ts` converts `RecordedAction[]` to Playwright TypeScript. `utils/selectorBuilder.ts` converts selector spec strings (e.g. `role::button::Login`) to `page.getByRole(...)` calls.
-3. **Persist**: `utils/storage.ts` wraps `chrome.storage.local`. Keys: `ppp_scripts`, `ppp_results`, `ppp_settings`.
-4. **Run**: `ScriptLibrary` POSTs the generated code to `companion-server` → companion writes a temp `.spec.ts`, spawns `npx playwright test`, returns pass/fail/error result. The temp file is deleted after execution.
+1. **Grabar**: `content/recorder.ts` escucha eventos DOM (click/input/change) → envía mensajes `ACTION_RECORDED` a `service-worker.ts` → el service worker los reenvía al popup via `chrome.runtime.onMessage`.
+2. **Generar**: `utils/scriptGenerator.ts` convierte `RecordedAction[]` a TypeScript de Playwright. `utils/selectorBuilder.ts` convierte strings de spec de selector (ej. `role::button::Login`) a llamadas `page.getByRole(...)`.
+3. **Persistir**: `utils/storage.ts` encapsula `chrome.storage.local`. Claves: `ppp_scripts`, `ppp_results`, `ppp_settings`.
+4. **Ejecutar**: `ScriptLibrary` hace POST del código generado al `companion-server` → el servidor escribe un `.spec.ts` temporal, lanza `npx playwright test`, retorna resultado pass/fail/error. El archivo temporal se elimina tras la ejecución.
 
-### Selector spec format
+### Formato de spec de selectores
 
-Selectors are stored as structured strings parsed by `buildLocatorCode()`:
+Los selectores se almacenan como strings estructurados que `buildLocatorCode()` interpreta:
 
-| Spec prefix | Generated locator |
+| Prefijo spec | Localizador generado |
 |---|---|
-| `testid::VALUE` | `page.getByTestId('VALUE')` |
-| `arialabel::VALUE` | `page.getByLabel('VALUE')` |
-| `label::VALUE` | `page.getByLabel('VALUE')` |
-| `role::ROLE::NAME` | `page.getByRole('ROLE', { name: 'NAME', exact: false })` |
-| `placeholder::VALUE` | `page.getByPlaceholder('VALUE')` |
-| `text::VALUE` | `page.getByText('VALUE', { exact: false })` |
+| `testid::VALOR` | `page.getByTestId('VALOR')` |
+| `arialabel::VALOR` | `page.getByLabel('VALOR')` |
+| `label::VALOR` | `page.getByLabel('VALOR')` |
+| `role::ROL::NOMBRE` | `page.getByRole('ROL', { name: 'NOMBRE', exact: false })` |
+| `placeholder::VALOR` | `page.getByPlaceholder('VALOR')` |
+| `text::VALOR` | `page.getByText('VALOR', { exact: false })` |
 | `css::SELECTOR` | `page.locator('SELECTOR')` |
 
-`buildSelector()` in `recorder.ts` assigns priorities: testId → ariaLabel → role+text (unique only) → CSS class disambiguator → placeholder → label → name → text → CSS path.
+`buildSelector()` en `recorder.ts` asigna prioridades: testId → ariaLabel → role+texto (solo si es único) → clase CSS como desambiguador → placeholder → label → name → texto → ruta CSS.
 
-### Key design decisions
+### Decisiones de diseño clave
 
-- **`isUniqueByText()`** runs at record time to prevent Playwright strict-mode violations: if multiple elements share the same role+text, the recorder falls through to a more specific selector.
-- **`deduplicateActions()`** in `scriptGenerator.ts` collapses consecutive fills on the same field and detects automatic SPA navigations (within 8 s of a user action) → emits `waitForLoadState('load')` instead of `goto()`.
-- **`waitForLoadState` strategy**: `'domcontentloaded'` in `beforeEach`, `'load'` after every navigate action, `'domcontentloaded'` after every click.
-- **Assertion timeout**: All `expect()` calls use `{ timeout: 30_000 }` to handle AJAX-loaded content.
-- **Input sanitization**: `ws()` strips newlines/null bytes from all action fields before code generation; `escapeString()` escapes for TypeScript string literals; `escapeUrl()` for `page.goto()`.
+- **`isUniqueByText()`** se ejecuta en tiempo de grabación para prevenir violaciones de modo estricto de Playwright: si varios elementos comparten el mismo role+texto, el grabador cae al siguiente selector más específico.
+- **`deduplicateActions()`** en `scriptGenerator.ts` colapsa fills consecutivos en el mismo campo y detecta navegaciones SPA automáticas (dentro de 8 s de una acción de usuario) → emite `waitForLoadState('load')` en lugar de `goto()`.
+- **Estrategia de `waitForLoadState`**: `'domcontentloaded'` en `beforeEach`, `'load'` tras cada acción navigate, `'domcontentloaded'` tras cada click.
+- **Timeout de assertions**: Todas las llamadas `expect()` usan `{ timeout: 30_000 }` para manejar contenido cargado por AJAX.
+- **Sanitización de entrada**: `ws()` elimina saltos de línea y bytes nulos de todos los campos de acción antes de generar código; `escapeString()` escapa para literales TypeScript; `escapeUrl()` para `page.goto()`.
 
-### Storage layout (`chrome.storage.local`)
+### Estructura de almacenamiento (`chrome.storage.local`)
 
-| Key | Type | Notes |
+| Clave | Tipo | Notas |
 |---|---|---|
-| `ppp_scripts` | `Script[]` | Saved scripts (include generated code + run stats) |
-| `ppp_results` | `TestResult[]` | Last 500 runs (newest first) |
-| `ppp_settings` | `AppSettings` | Extension configuration |
+| `ppp_scripts` | `Script[]` | Scripts guardados (incluyen código generado + estadísticas de ejecución) |
+| `ppp_results` | `TestResult[]` | Últimas 500 ejecuciones (más reciente primero) |
+| `ppp_settings` | `AppSettings` | Configuración de la extensión |
 
-### Files to touch for common tasks
+### Archivos a modificar según la tarea
 
-| Task | Files |
+| Tarea | Archivos |
 |---|---|
-| Change how selectors are recorded | `extension/src/content/recorder.ts` → `buildSelector()` |
-| Change generated Playwright code | `extension/src/utils/scriptGenerator.ts` → `generateActionCode()` |
-| Add a new locator type | `extension/src/utils/selectorBuilder.ts` → `buildLocatorCode()` |
-| Add a new action type | `extension/src/types/index.ts` + recorder + scriptGenerator |
-| Add a new assertion type | `types/index.ts` (AssertionType) + `buildAssertionLine()` in scriptGenerator |
-| Change test runner behavior | `companion-server/src/runner.ts` |
-| Add a new API endpoint | `companion-server/src/server.ts` |
-| Change dashboard metrics | `extension/src/popup/components/Dashboard.tsx` |
-| Add a new setting | `types/index.ts` (AppSettings) + `storage.ts` (DEFAULT_SETTINGS) + `Settings.tsx` |
+| Cambiar cómo se graban los selectores | `extension/src/content/recorder.ts` → `buildSelector()` |
+| Cambiar el código Playwright generado | `extension/src/utils/scriptGenerator.ts` → `generateActionCode()` |
+| Agregar un nuevo tipo de localizador | `extension/src/utils/selectorBuilder.ts` → `buildLocatorCode()` |
+| Agregar un nuevo tipo de acción | `extension/src/types/index.ts` + recorder + scriptGenerator |
+| Agregar un nuevo tipo de assertion | `types/index.ts` (AssertionType) + `buildAssertionLine()` en scriptGenerator |
+| Cambiar el comportamiento del runner | `companion-server/src/runner.ts` |
+| Agregar un nuevo endpoint de API | `companion-server/src/server.ts` |
+| Cambiar métricas del dashboard | `extension/src/popup/components/Dashboard.tsx` |
+| Agregar una nueva configuración | `types/index.ts` (AppSettings) + `storage.ts` (DEFAULT_SETTINGS) + `Settings.tsx` |
 
 ---
 
-## Two repository directories
+## Dos directorios locales del repositorio
 
-The project exists in **two local copies** pointing to the same remote (`github.com/lrbg/PlugInPlayWrightPro-Chrome`):
+El proyecto existe en **dos copias locales** apuntando al mismo remoto (`github.com/lrbg/PlugInPlayWrightPro-Chrome`):
 
-- `/Users/luisrogelio/Documents/Plug-InPlaywrightPro/` — **active copy loaded in Chrome** — always edit this one
-- `/Users/luisrogelio/Documents/PlugInPlayWrightPro-Chrome/` — secondary copy (CWD in some sessions)
+- `/Users/luisrogelio/Documents/Plug-InPlaywrightPro/` — **copia activa cargada en Chrome** — siempre editar esta
+- `/Users/luisrogelio/Documents/PlugInPlayWrightPro-Chrome/` — copia secundaria (CWD en algunas sesiones)
 
-After editing and building in `Plug-InPlaywrightPro`, sync changes to `PlugInPlayWrightPro-Chrome` if needed, then commit from `Plug-InPlaywrightPro`.
+Tras editar y compilar en `Plug-InPlaywrightPro`, sincronizar cambios a `PlugInPlayWrightPro-Chrome` si es necesario y hacer commit desde `Plug-InPlaywrightPro`.
